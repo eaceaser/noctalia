@@ -1146,6 +1146,7 @@ if build_tests
     'state_store',
     'string_utils',
     'system_monitor_service',
+    'taskbar_widget',
     'time_format',
     'triad_workspace_backend',
     'ui_tree_reconciler',
