@@ -62,6 +62,23 @@ namespace {
 
   constexpr Logger kLog("compositor_platform");
 
+  [[nodiscard]] std::unordered_set<std::string>
+  windowIdsFromAssignments(const std::vector<WorkspaceWindowAssignment>& assignments) {
+    std::unordered_set<std::string> windowIds;
+    windowIds.reserve(assignments.size());
+    for (const auto& assignment : assignments) {
+      if (!assignment.windowId.empty()) {
+        windowIds.insert(assignment.windowId);
+      }
+    }
+    return windowIds;
+  }
+
+  void
+  retainToplevelsWithWindowIds(std::vector<ToplevelInfo>& windows, const std::unordered_set<std::string>& windowIds) {
+    std::erase_if(windows, [&](const ToplevelInfo& window) { return !windowIds.contains(window.identifier); });
+  }
+
   [[nodiscard]] const char* valueOrUnset(const char* value) {
     return value != nullptr && value[0] != '\0' ? value : "<unset>";
   }
@@ -875,11 +892,56 @@ std::vector<ToplevelInfo> CompositorPlatform::windowsWithoutAppId(wl_output* out
   return windows;
 }
 
+std::vector<ToplevelInfo> CompositorPlatform::taskbarWindowsForApp(
+    const std::string& idLower, const std::string& wmClassLower, wl_output* outputFilter,
+    const std::unordered_set<std::string>* allowedNiriWindowIds
+) const {
+  if (compositors::isNiri() && m_wayland.hasExtForeignToplevelList()) {
+    // Niri exposes its numeric IPC window ID as the ext-foreign-toplevel
+    // identifier, providing an exact association even for duplicate titles.
+    auto windows = m_wayland.extWindowsForApp(idLower, wmClassLower);
+    if (!windows.empty()) {
+      if (allowedNiriWindowIds != nullptr) {
+        retainToplevelsWithWindowIds(windows, *allowedNiriWindowIds);
+      } else {
+        retainToplevelsWithWindowIds(windows, windowIdsFromAssignments(workspaceWindowAssignments(outputFilter)));
+      }
+    }
+    // Do not fall back to title/app-id matching while one side of the exact
+    // Niri-id join is still pending. The ext `done` or IPC update will retry.
+    return windows;
+  }
+  return windowsForApp(idLower, wmClassLower, outputFilter);
+}
+
+std::vector<ToplevelInfo> CompositorPlatform::taskbarWindowsWithoutAppId(
+    wl_output* outputFilter, const std::unordered_set<std::string>* allowedNiriWindowIds
+) const {
+  if (compositors::isNiri() && m_wayland.hasExtForeignToplevelList()) {
+    auto windows = m_wayland.extWindowsWithoutAppId();
+    if (!windows.empty()) {
+      if (allowedNiriWindowIds != nullptr) {
+        retainToplevelsWithWindowIds(windows, *allowedNiriWindowIds);
+      } else {
+        retainToplevelsWithWindowIds(windows, windowIdsFromAssignments(workspaceWindowAssignments(outputFilter)));
+      }
+    }
+    return windows;
+  }
+  return windowsWithoutAppId(outputFilter);
+}
+
 void CompositorPlatform::activateToplevel(zwlr_foreign_toplevel_handle_v1* handle) {
   m_wayland.activateToplevel(handle);
 }
 
 void CompositorPlatform::activateToplevelInfo(const ToplevelInfo& window) {
+  // Niri's ext-foreign-toplevel identifier is its exact IPC window ID, and
+  // foreign-toplevel activation does not reliably scroll to the target.
+  if (compositors::isNiri() && window.extHandle != nullptr && !window.identifier.empty()) {
+    focusCompositorWindow(window.identifier);
+    return;
+  }
   if (window.handle != nullptr) {
     activateToplevel(window.handle);
     return;
@@ -898,6 +960,12 @@ void CompositorPlatform::closeToplevel(zwlr_foreign_toplevel_handle_v1* handle) 
 void CompositorPlatform::closeToplevelInfo(const ToplevelInfo& window) {
   if (window.handle != nullptr) {
     closeToplevel(window.handle);
+    return;
+  }
+  if (compositors::isNiri() && !window.identifier.empty()) {
+    if (m_workspaceMetadataBackend != nullptr) {
+      (void)m_workspaceMetadataBackend->closeWindowById(window.identifier);
+    }
     return;
   }
   if (compositors::isKde() && m_kwinActiveWindow != nullptr && m_kwinActiveWindow->isAvailable()) {

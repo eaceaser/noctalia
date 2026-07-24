@@ -1122,6 +1122,7 @@ if build_tests
     'math_provider',
     'notification_filter',
     'notification_history_utf8',
+    'niri_workspace_backend',
     'path_browse',
     'plugin_bindings',
     'plugin_catalog',

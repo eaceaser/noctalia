@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 struct wl_output;
@@ -104,6 +105,13 @@ public:
   [[nodiscard]] std::vector<ToplevelInfo>
   windowsForApp(const std::string& idLower, const std::string& wmClassLower, wl_output* outputFilter = nullptr) const;
   [[nodiscard]] std::vector<ToplevelInfo> windowsWithoutAppId(wl_output* outputFilter = nullptr) const;
+  [[nodiscard]] std::vector<ToplevelInfo> taskbarWindowsForApp(
+      const std::string& idLower, const std::string& wmClassLower, wl_output* outputFilter = nullptr,
+      const std::unordered_set<std::string>* allowedNiriWindowIds = nullptr
+  ) const;
+  [[nodiscard]] std::vector<ToplevelInfo> taskbarWindowsWithoutAppId(
+      wl_output* outputFilter = nullptr, const std::unordered_set<std::string>* allowedNiriWindowIds = nullptr
+  ) const;
   [[nodiscard]] bool containsWlrToplevelHandle(zwlr_foreign_toplevel_handle_v1* handle) const;
   void activateToplevel(zwlr_foreign_toplevel_handle_v1* handle);
   void activateToplevelInfo(const ToplevelInfo& window);

@@ -41,6 +41,39 @@ public:
         .title = std::move(title),
     };
   }
+
+  static std::pair<std::string, std::string>
+  rebindWorkspaceWindow(std::string exactWindowId, std::string assignedWindowId) {
+    TaskbarWidget::TaskModel task{
+        .workspaceWindowId = exactWindowId,
+        .exactCompositorWindowId = std::move(exactWindowId),
+    };
+    task.workspaceWindowId = std::move(assignedWindowId);
+    return {task.workspaceWindowId, task.exactCompositorWindowId};
+  }
+
+  static std::string bindingWindowId(std::string workspaceWindowId, std::string exactWindowId) {
+    return std::string(
+        TaskbarWidget::workspaceBindingWindowId(
+            TaskbarWidget::TaskModel{
+                .workspaceWindowId = std::move(workspaceWindowId),
+                .exactCompositorWindowId = std::move(exactWindowId),
+            }
+        )
+    );
+  }
+
+  static bool exactWindowIdChangeKeepsLayout(std::string previousId, std::string nextId) {
+    const TaskbarWidget::TaskModel previous{
+        .handleKey = 11,
+        .exactCompositorWindowId = std::move(previousId),
+    };
+    const TaskbarWidget::TaskModel next{
+        .handleKey = 11,
+        .exactCompositorWindowId = std::move(nextId),
+    };
+    return TaskbarWidget::compareModels(false, {previous}, {}, {next}, {}).layoutEqual;
+  }
 };
 
 int main() {
@@ -62,6 +95,15 @@ int main() {
   assert(TaskbarWidgetTestAccess::resolvedTitle(tasks, 0, 7, 7) == std::optional<std::string>("retitled"));
   assert(!TaskbarWidgetTestAccess::resolvedTitle(tasks, 2, 7, 7).has_value());
   assert(!TaskbarWidgetTestAccess::resolvedTitle(tasks, 0, 7, 8).has_value());
+
+  // Workspace placement can be rebound while compositor actions retain the
+  // authoritative ext-foreign-toplevel identifier.
+  assert(TaskbarWidgetTestAccess::rebindWorkspaceWindow("41", "42") == std::pair(std::string("42"), std::string("41")));
+  // Exact compositor identity also remains authoritative for later workspace
+  // reconciliation instead of preserving the crossed mutable assignment.
+  assert(TaskbarWidgetTestAccess::bindingWindowId("42", "41") == "41");
+  assert(TaskbarWidgetTestAccess::bindingWindowId("42", "") == "42");
+  assert(!TaskbarWidgetTestAccess::exactWindowIdChangeKeepsLayout("41", "42"));
 
   return 0;
 }

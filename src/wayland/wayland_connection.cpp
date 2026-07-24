@@ -547,10 +547,15 @@ std::vector<ToplevelInfo> WaylandConnection::windowsWithoutAppId(wl_output* outp
 
 std::vector<ToplevelInfo>
 WaylandConnection::extWindowsForApp(const std::string& idLower, const std::string& wmClassLower) const {
-  if ((!compositors::isHyprland() && !compositors::isKde()) || !m_extForeignToplevels.isBound()) {
+  if ((!compositors::isHyprland() && !compositors::isKde() && !compositors::isNiri())
+      || !m_extForeignToplevels.isBound()) {
     return {};
   }
   return m_extForeignToplevels.windowsForApp(idLower, wmClassLower);
+}
+
+std::vector<ToplevelInfo> WaylandConnection::extWindowsWithoutAppId() const {
+  return m_extForeignToplevels.isBound() ? m_extForeignToplevels.windowsWithoutAppId() : std::vector<ToplevelInfo>{};
 }
 
 bool WaylandConnection::containsWlrToplevelHandle(zwlr_foreign_toplevel_handle_v1* handle) const {
