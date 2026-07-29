@@ -27,6 +27,7 @@
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cctype>
 #include <cmath>
 #include <functional>
@@ -596,6 +597,7 @@ void TaskbarWidget::rebuild(Renderer& renderer) {
   }
   m_activeUsesFocusedColor = !m_focusedOutputOnly || isFocusedOutput();
   m_taskTileAreas.clear();
+  m_taskTileAreas.reserve(m_tasks.size());
   clearChildren(m_taskStrip);
   buildTaskButtons(renderer);
 }
@@ -712,7 +714,10 @@ void TaskbarWidget::buildTaskButtons(Renderer& renderer) {
     });
   };
 
+  // Only elements of m_tasks have a meaningful position; any other TaskModel would yield a
+  // garbage index that the generation check cannot catch.
   const auto taskRefFor = [this](const TaskModel& task) {
+    assert(&task >= m_tasks.data() && &task < m_tasks.data() + m_tasks.size());
     return TaskRef{
         .index = static_cast<std::size_t>(&task - m_tasks.data()),
         .generation = m_taskGeneration,
@@ -721,7 +726,10 @@ void TaskbarWidget::buildTaskButtons(Renderer& renderer) {
 
   auto createTaskTile = [&](TaskRef taskRef, std::vector<TaskRef> cycleCandidates = {}, std::string cycleKey = {},
                             std::size_t badgeCount = 1) {
+    // Unreachable at build time: every ref is built from a live m_tasks element at the current
+    // generation. Kept as a release-safe guard so a stale ref cannot deref null.
     const TaskModel* taskModel = resolveTask(m_tasks, taskRef, m_taskGeneration);
+    assert(taskModel != nullptr);
     if (taskModel == nullptr) {
       return ui::inputArea({});
     }
@@ -916,6 +924,8 @@ void TaskbarWidget::buildTaskButtons(Renderer& renderer) {
         area->addChild(std::move(indicator));
       }
     }
+    // Installed even for a currently empty title: a title arriving later must surface without a
+    // rebuild. Empty content measures to nothing, so the popup never shows.
     area->setTooltipProvider([this, taskRef]() -> TooltipContent {
       const TaskModel* current = resolveTask(m_tasks, taskRef, m_taskGeneration);
       return current != nullptr && !current->title.empty() ? TooltipContent{current->title}
