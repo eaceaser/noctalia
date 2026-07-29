@@ -25,15 +25,21 @@ public:
     return {comparison.layoutEqual, comparison.titlesChanged};
   }
 
-  static std::optional<std::string>
-  currentTitle(std::vector<TaskbarWidget::TaskModel> tasks, const TaskbarWidget::TaskModel& identity) {
-    const auto* current = TaskbarWidget::currentTask(tasks, identity);
+  static std::optional<std::string> currentTitle(
+      const std::vector<TaskbarWidget::TaskModel>& tasks, std::size_t index, std::uint64_t referenceGeneration,
+      std::uint64_t currentGeneration
+  ) {
+    const auto* current =
+        TaskbarWidget::resolveTask(tasks, {.index = index, .generation = referenceGeneration}, currentGeneration);
     return current != nullptr && !current->title.empty() ? std::optional<std::string>(current->title) : std::nullopt;
   }
 
-  static std::optional<std::string>
-  currentAppId(std::vector<TaskbarWidget::TaskModel> tasks, const TaskbarWidget::TaskModel& identity) {
-    const auto* current = TaskbarWidget::currentTask(tasks, identity);
+  static std::optional<std::string> currentAppId(
+      const std::vector<TaskbarWidget::TaskModel>& tasks, std::size_t index, std::uint64_t referenceGeneration,
+      std::uint64_t currentGeneration
+  ) {
+    const auto* current =
+        TaskbarWidget::resolveTask(tasks, {.index = index, .generation = referenceGeneration}, currentGeneration);
     return current != nullptr ? std::optional<std::string>(current->appId) : std::nullopt;
   }
 
@@ -58,25 +64,20 @@ int main() {
   assert(TaskbarWidgetTestAccess::compare(true, 11, 11, "same", "same") == std::pair(true, false));
   assert(!TaskbarWidgetTestAccess::compare(false, 11, 12, "old", "new").first);
 
-  const auto original = TaskbarWidgetTestAccess::task(11, "old", "window-11");
   auto tasks = std::vector{
       TaskbarWidgetTestAccess::task(11, "updated", "window-11"),
       TaskbarWidgetTestAccess::task(12, "second", "window-12"),
   };
-  assert(TaskbarWidgetTestAccess::currentTitle(tasks, original) == std::optional<std::string>("updated"));
+  assert(TaskbarWidgetTestAccess::currentTitle(tasks, 0, 7, 7) == std::optional<std::string>("updated"));
 
   tasks[0].appId = "updated.app";
-  assert(TaskbarWidgetTestAccess::currentAppId(tasks, original) == std::optional<std::string>("updated.app"));
+  assert(TaskbarWidgetTestAccess::currentAppId(tasks, 0, 7, 7) == std::optional<std::string>("updated.app"));
 
   tasks[0].title.clear();
-  assert(!TaskbarWidgetTestAccess::currentTitle(tasks, original).has_value());
+  assert(!TaskbarWidgetTestAccess::currentTitle(tasks, 0, 7, 7).has_value());
 
-  tasks[0] = TaskbarWidgetTestAccess::task(21, "renumbered", "window-11");
-  assert(TaskbarWidgetTestAccess::currentTitle(tasks, original) == std::optional<std::string>("renumbered"));
-
-  const auto pinned = TaskbarWidgetTestAccess::task(0, "old", {}, "dev.noctalia.Example", true);
-  tasks = {TaskbarWidgetTestAccess::task(0, "updated", {}, "dev.noctalia.Example", true)};
-  assert(TaskbarWidgetTestAccess::currentTitle(tasks, pinned) == std::optional<std::string>("updated"));
+  assert(!TaskbarWidgetTestAccess::currentTitle(tasks, 2, 7, 7).has_value());
+  assert(!TaskbarWidgetTestAccess::currentTitle(tasks, 0, 7, 8).has_value());
 
   return 0;
 }

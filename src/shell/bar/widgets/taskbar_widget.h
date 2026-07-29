@@ -118,6 +118,11 @@ private:
     bool titlesChanged = false;
   };
 
+  struct TaskRef {
+    std::size_t index = 0;
+    std::uint64_t generation = 0;
+  };
+
   void doLayout(Renderer& renderer, float containerWidth, float containerHeight) override;
   void doUpdate(Renderer& renderer) override;
 
@@ -150,7 +155,8 @@ private:
   [[nodiscard]] static ColorSpec readableColorForFill(const ColorSpec& fill);
   [[nodiscard]] static ColorRole onRoleForFill(ColorRole fill);
   [[nodiscard]] static bool taskInWorkspaceGroup(const TaskModel& task, const WorkspaceModel& ws);
-  [[nodiscard]] static const TaskModel* currentTask(const std::vector<TaskModel>& tasks, const TaskModel& identity);
+  [[nodiscard]] static const TaskModel*
+  resolveTask(const std::vector<TaskModel>& tasks, TaskRef ref, std::uint64_t currentGeneration);
   void activateTaskModel(const TaskModel& task);
   void closeTaskModel(const TaskModel& task);
   void applyPinnedMerge(std::vector<TaskModel>& tasks);
@@ -202,6 +208,8 @@ private:
   Flex* m_taskStrip = nullptr;
 
   std::vector<TaskModel> m_tasks;
+  // Retained controls resolve task indices only while this model generation matches.
+  std::uint64_t m_taskGeneration = 0;
   // Non-owning; cleared before task-strip children are destroyed.
   std::vector<InputArea*> m_taskTileAreas;
   std::vector<WorkspaceModel> m_workspaces;
