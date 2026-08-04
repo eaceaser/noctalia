@@ -1,4 +1,5 @@
 #include "system/internal_app_metadata.h"
+#include "wayland/wayland_protocol_policy.h"
 
 #include <cassert>
 #include <cstdint>
@@ -25,6 +26,15 @@ namespace internal_apps {
 } // namespace internal_apps
 
 int main() {
+  using compositors::CompositorKind;
+  using wayland_protocol_policy::shouldBindExtForeignToplevelList;
+
+  assert(shouldBindExtForeignToplevelList(CompositorKind::Niri));
+  assert(shouldBindExtForeignToplevelList(CompositorKind::Hyprland));
+  assert(shouldBindExtForeignToplevelList(CompositorKind::Kde));
+  assert(!shouldBindExtForeignToplevelList(CompositorKind::Unknown));
+  assert(!shouldBindExtForeignToplevelList(CompositorKind::Sway));
+
   WaylandToplevels toplevels;
   auto* handle = reinterpret_cast<zwlr_foreign_toplevel_handle_v1*>(0x1);
   auto [it, inserted] = toplevels.m_handles.try_emplace(handle, WaylandToplevels::ToplevelState{});
