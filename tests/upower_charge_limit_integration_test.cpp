@@ -277,6 +277,9 @@ public:
   static std::string behavior(const PowerTab& tab, std::size_t index) {
     return tab.m_chargeLimitRows.at(index).behaviorLabel->text();
   }
+  static float behaviorOpacity(const PowerTab& tab, std::size_t index) {
+    return tab.m_chargeLimitRows.at(index).behaviorLabel->color().a;
+  }
 };
 
 int main() {
@@ -333,7 +336,8 @@ int main() {
     assert(PowerTabTestAccess::nameVisible(tab, 1));
     assert(PowerTabTestAccess::name(tab, 0) == "Primary Battery");
     assert(PowerTabTestAccess::name(tab, 1) == "Secondary Battery");
-    assert(PowerTabTestAccess::behavior(tab, 0) == "Current: Allows the battery to charge fully");
+    assert(PowerTabTestAccess::behavior(tab, 0) == "Starts below 75% · Stops at 80%");
+    assert(PowerTabTestAccess::behaviorOpacity(tab, 0) < 1.0F);
     assert(mouse.supportedReadCount() == 0);
     assert(mouse.enabledReadCount() == 0);
 
@@ -365,6 +369,8 @@ int main() {
     PowerTabTestAccess::rebuild(tab);
     assert(PowerTabTestAccess::toggleChecked(tab, 0));
     assert(PowerTabTestAccess::toggleEnabled(tab, 0));
+    assert(PowerTabTestAccess::behavior(tab, 0) == "Starts below 75% · Stops at 80%");
+    assert(PowerTabTestAccess::behaviorOpacity(tab, 0) == 1.0F);
 
     assert(service.enableChargeThreshold(bat0.path, false));
     drainUntil(bus, [&]() { return bat0.pendingCount() == 1; });
@@ -382,7 +388,7 @@ int main() {
     assert(PowerTabTestAccess::toggleChecked(tab, 0));
     assert(PowerTabTestAccess::toggleEnabled(tab, 0));
     assert(PowerTabTestAccess::errorVisible(tab, 0));
-    assert(PowerTabTestAccess::error(tab, 0) == "Battery protection could not be changed.");
+    assert(PowerTabTestAccess::error(tab, 0) == "Charge thresholds could not be changed.");
 
     assert(service.enableChargeThreshold(bat0.path, false));
     drainUntil(bus, [&]() { return bat0.pendingCount() == 1; });
@@ -394,7 +400,7 @@ int main() {
     info = findBattery(service, bat0.path);
     assert(info != nullptr && info->chargeLimit.operationError == ChargeLimitOperationError::PermissionDenied);
     PowerTabTestAccess::rebuild(tab);
-    assert(PowerTabTestAccess::error(tab, 0) == "Authorization was denied. Battery protection was not changed.");
+    assert(PowerTabTestAccess::error(tab, 0) == "Authorization was denied. Charge thresholds were not changed.");
 
     assert(service.enableChargeThreshold(bat1.path, true));
     drainUntil(bus, [&]() { return bat1.pendingCount() == 1; });

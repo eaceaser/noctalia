@@ -512,7 +512,7 @@ void PowerTab::rebuildChargeLimits() {
           ui::row(
               {.out = &entry.controlRow, .align = FlexAlign::Center, .gap = Style::spaceSm * scale, .visible = false},
               ui::label({
-                  .text = i18n::tr("control-center.power.charging.battery-protection"),
+                  .text = i18n::tr("control-center.power.charging.use-thresholds"),
                   .fontSize = Style::fontSizeCaption * scale,
                   .color = colorSpecFromRole(ColorRole::OnSurface),
                   .flexGrow = 1.0F,
@@ -554,8 +554,14 @@ void PowerTab::rebuildChargeLimits() {
     if (row.nameLabel != nullptr) {
       row.nameLabel->setText(deviceDisplayName(batteries[i]));
     }
-    std::string behavior = permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge")
-                                             : thresholdBehavior(state.effectiveStart, state.effectiveEnd);
+    const ChargeLimitControlState control = chargeLimitControlState(state);
+    const std::string effective = thresholdBehavior(state.effectiveStart, state.effectiveEnd);
+    const std::string configured = thresholdBehavior(state.configuredStart, state.configuredEnd);
+    const bool presentConfiguredAsPrimary =
+        control.visible && !configured.empty() && (!control.checked || effective.empty());
+    std::string behavior = presentConfiguredAsPrimary
+        ? configured
+        : (permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge") : effective);
     if (behavior.empty()) {
       if (mode == ChargeLimitMode::FirmwareManaged) {
         behavior = i18n::tr("control-center.power.charging.firmware-managed");
@@ -563,16 +569,18 @@ void PowerTab::rebuildChargeLimits() {
         behavior = i18n::tr("control-center.power.charging.unreadable");
       }
     }
-    row.behaviorLabel->setText(i18n::tr("control-center.power.charging.effective", "behavior", behavior));
+    row.behaviorLabel->setText(behavior);
+    row.behaviorLabel->setColor(
+        control.visible && !control.checked ? colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.55F)
+                                            : colorSpecFromRole(ColorRole::OnSurface)
+    );
 
-    const std::string configured = thresholdBehavior(state.configuredStart, state.configuredEnd);
-    const bool showConfigured = !configured.empty() && !sameThresholds(state);
+    const bool showConfigured = !presentConfiguredAsPrimary && !configured.empty() && !sameThresholds(state);
     row.configuredLabel->setVisible(showConfigured);
     if (showConfigured) {
       row.configuredLabel->setText(i18n::tr("control-center.power.charging.configured", "limits", configured));
     }
 
-    const ChargeLimitControlState control = chargeLimitControlState(state);
     std::string management;
     if (mode == ChargeLimitMode::ExternallyManaged) {
       management = i18n::tr("control-center.power.charging.externally-managed");

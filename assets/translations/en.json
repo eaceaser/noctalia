@@ -305,21 +305,20 @@
     "power": {
       "battery": "Battery",
       "charging": {
-        "battery-protection": "Battery protection",
         "configured": "Configured: {limits}",
         "display-only": "Display only",
-        "effective": "Current: {behavior}",
-        "error-denied": "Authorization was denied. Battery protection was not changed.",
-        "error-failed": "Battery protection could not be changed.",
+        "error-denied": "Authorization was denied. Charge thresholds were not changed.",
+        "error-failed": "Charge thresholds could not be changed.",
         "externally-managed": "Externally managed",
         "firmware-managed": "Charging is managed by system firmware",
         "full-charge": "Allows the battery to charge fully",
-        "starts": "Resumes below {start}%",
-        "starts-stops": "Resumes below {start}%; stops at {end}%",
+        "starts": "Starts below {start}%",
+        "starts-stops": "Starts below {start}% · Stops at {end}%",
         "stops": "Stops at {end}%",
         "title": "Battery charging",
         "unreadable": "Unavailable",
-        "unsupported": "Battery protection is not supported"
+        "unsupported": "Charge thresholds are not supported",
+        "use-thresholds": "Use charge thresholds"
       },
       "design-capacity": "Of design capacity",
       "health": "Battery Health",
