@@ -1163,6 +1163,7 @@ if build_tests
     'time_format',
     'triad_workspace_backend',
     'ui_tree_reconciler',
+    'upower_charge_limit',
     'wayland_toplevels_identity',
     'widget_action',
     'widget_definition',

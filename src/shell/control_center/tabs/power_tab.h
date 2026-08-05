@@ -11,6 +11,7 @@ class Label;
 class ProgressBar;
 class Renderer;
 class Segmented;
+class Toggle;
 class UPowerService;
 class PowerProfilesService;
 
@@ -26,11 +27,13 @@ private:
   void doUpdate(Renderer& renderer) override;
 
   void buildStatusCard(Flex& root, float scale);
+  void buildChargingCard(Flex& root, float scale);
   void buildProfilesCard(Flex& root, float scale);
   void buildHealthCard(Flex& root, float scale);
   void buildPeripheralsCard(Flex& root, float scale);
 
   void syncBatteryStatus();
+  void rebuildChargeLimits();
   void syncPowerProfiles();
   void syncBatteryHealth();
   void rebuildPeripherals();
@@ -50,6 +53,23 @@ private:
   Label* m_timeLabel = nullptr;
   Flex* m_rateRow = nullptr;
   Label* m_rateLabel = nullptr;
+
+  // Battery charging limits
+  Flex* m_chargingCard = nullptr;
+  Flex* m_chargingList = nullptr;
+  struct ChargeLimitRow {
+    std::string path;
+    Flex* row = nullptr;
+    Label* nameLabel = nullptr;
+    Label* behaviorLabel = nullptr;
+    Label* configuredLabel = nullptr;
+    Label* managementLabel = nullptr;
+    Label* errorLabel = nullptr;
+    Flex* controlRow = nullptr;
+    Toggle* toggle = nullptr;
+  };
+  std::vector<ChargeLimitRow> m_chargeLimitRows;
+  std::string m_lastChargeLimitKey;
 
   // Power profiles
   Flex* m_profilesCard = nullptr;

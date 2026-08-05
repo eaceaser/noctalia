@@ -304,6 +304,23 @@
     },
     "power": {
       "battery": "Battery",
+      "charging": {
+        "charge-limit": "Charge limit",
+        "configured": "Configured: {limits}",
+        "display-only": "Display only",
+        "effective": "Current: {behavior}",
+        "error-denied": "Authorization was denied. The charge limit was not changed.",
+        "error-failed": "The charge limit could not be changed.",
+        "externally-managed": "Externally managed",
+        "firmware-managed": "Charging limits are managed by firmware",
+        "full-charge": "Charges fully",
+        "starts": "Starts below {start}%",
+        "starts-stops": "Starts below {start}%; stops at {end}%",
+        "stops": "Stops at {end}%",
+        "title": "Battery charging",
+        "unreadable": "Unavailable",
+        "unsupported": "Charge limits are not supported"
+      },
       "design-capacity": "Of design capacity",
       "health": "Battery Health",
       "performance-inhibited": "Performance unavailable",

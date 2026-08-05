@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -57,6 +58,65 @@ enum class BatteryState : std::uint8_t {
   PendingDischarge = 6,
 };
 
+enum class ChargeLimitOperationError : std::uint8_t {
+  None,
+  PermissionDenied,
+  Failed,
+};
+
+enum class ChargeLimitMode : std::uint8_t {
+  Unsupported,
+  UPowerActive,
+  UPowerDisabled,
+  ExternallyManaged,
+  FirmwareManaged,
+  ReadOnly,
+};
+
+struct ChargeThresholdProbe {
+  bool nativePathValid = false;
+  std::optional<std::uint32_t> start;
+  std::optional<std::uint32_t> end;
+
+  bool operator==(const ChargeThresholdProbe&) const = default;
+};
+
+struct UPowerChargeLimitState {
+  // Values configured in UPower. They are presets, not necessarily what the kernel currently applies.
+  std::optional<std::uint32_t> configuredStart;
+  std::optional<std::uint32_t> configuredEnd;
+  // Read-only values currently exposed by the kernel.
+  std::optional<std::uint32_t> effectiveStart;
+  std::optional<std::uint32_t> effectiveEnd;
+  std::optional<std::uint32_t> supportedSettings;
+  bool capabilityAvailable = false;
+  bool supported = false;
+  bool methodAvailable = false;
+  bool enabledAvailable = false;
+  bool enabled = false;
+  bool effectivePathValid = false;
+  bool requestPending = false;
+  std::optional<bool> requestedEnabled;
+  ChargeLimitOperationError operationError = ChargeLimitOperationError::None;
+
+  bool operator==(const UPowerChargeLimitState&) const = default;
+};
+
+struct ChargeLimitControlState {
+  bool visible = false;
+  bool checked = false;
+  bool enabled = false;
+
+  bool operator==(const ChargeLimitControlState&) const = default;
+};
+
+[[nodiscard]] ChargeThresholdProbe readChargeThresholdsFromSysfs(
+    std::string_view nativePath, const std::filesystem::path& powerSupplyRoot = "/sys/class/power_supply"
+);
+[[nodiscard]] bool chargeLimitIsRestrictive(const UPowerChargeLimitState& state) noexcept;
+[[nodiscard]] ChargeLimitMode classifyChargeLimit(const UPowerChargeLimitState& state) noexcept;
+[[nodiscard]] ChargeLimitControlState chargeLimitControlState(const UPowerChargeLimitState& state) noexcept;
+
 [[nodiscard]] std::string batteryStateLabel(BatteryState state);
 
 // Level-aware battery icon (battery-0..4 / charging / plugged), shared by the bar widget and Power tab.
@@ -90,6 +150,7 @@ struct UPowerDeviceInfo {
   bool powerSupply = false;
   bool isPresent = false;
   UPowerState state;
+  UPowerChargeLimitState chargeLimit;
 
   bool operator==(const UPowerDeviceInfo&) const = default;
 
@@ -103,6 +164,7 @@ public:
   using ChangeCallback = std::function<void()>;
 
   explicit UPowerService(SystemBus& bus);
+  ~UPowerService();
 
   void setChangeCallback(ChangeCallback callback);
   void refresh();
@@ -115,16 +177,21 @@ public:
   // Peripheral (non-system) battery whose serial matches, compared case-insensitively because
   // MAC-style serials differ in case between BlueZ-backed and kernel-backed UPower devices.
   [[nodiscard]] const UPowerDeviceInfo* peripheralBatteryForSerial(std::string_view serial) const;
+  // Applies or removes UPower's configured preset. Completion is reflected in the device's
+  // chargeLimit fields and delivered through the normal change callback.
+  [[nodiscard]] bool enableChargeThreshold(std::string_view devicePath, bool enabled);
 
 private:
   struct TrackedDevice {
     UPowerDeviceInfo info;
-    std::unique_ptr<sdbus::IProxy> proxy;
+    std::shared_ptr<sdbus::IProxy> proxy;
   };
 
   [[nodiscard]] UPowerState readDefaultState() const;
   [[nodiscard]] UPowerState readDeviceState(sdbus::IProxy& proxy) const;
-  [[nodiscard]] UPowerDeviceInfo readDeviceInfo(std::string path, sdbus::IProxy& proxy) const;
+  [[nodiscard]] UPowerDeviceInfo readDeviceInfo(
+      std::string path, sdbus::IProxy& proxy, std::optional<bool> chargeThresholdMethodAvailable = std::nullopt
+  ) const;
   void refreshDisplayDeviceProxy();
   void emitChangedIfNeeded(bool devicesChanged);
   void rescanDevices();
@@ -138,4 +205,5 @@ private:
   std::optional<UPowerDeviceInfo> m_dummyDevice;
   UPowerState m_state;
   ChangeCallback m_changeCallback;
+  std::shared_ptr<int> m_lifetimeToken = std::make_shared<int>(0);
 };

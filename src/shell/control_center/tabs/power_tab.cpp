@@ -6,6 +6,7 @@
 #include "render/core/renderer.h"
 #include "time/time_format.h"
 #include "ui/builders.h"
+#include "ui/controls/toggle.h"
 #include "ui/palette.h"
 
 #include <algorithm>
@@ -39,6 +40,25 @@ namespace {
     return i18n::tr("control-center.power.unknown-device");
   }
 
+  std::string thresholdBehavior(const std::optional<std::uint32_t>& start, const std::optional<std::uint32_t>& end) {
+    if (start.has_value() && end.has_value()) {
+      return i18n::tr(
+          "control-center.power.charging.starts-stops", "start", std::to_string(*start), "end", std::to_string(*end)
+      );
+    }
+    if (start.has_value()) {
+      return i18n::tr("control-center.power.charging.starts", "start", std::to_string(*start));
+    }
+    if (end.has_value()) {
+      return i18n::tr("control-center.power.charging.stops", "end", std::to_string(*end));
+    }
+    return {};
+  }
+
+  bool sameThresholds(const UPowerChargeLimitState& state) {
+    return state.configuredStart == state.effectiveStart && state.configuredEnd == state.effectiveEnd;
+  }
+
 } // namespace
 
 PowerTab::PowerTab(UPowerService* upower, PowerProfilesService* powerProfiles)
@@ -68,6 +88,7 @@ std::unique_ptr<Flex> PowerTab::create() {
   content->setGap(Style::spaceMd * scale);
 
   buildStatusCard(*content, scale);
+  buildChargingCard(*content, scale);
   buildProfilesCard(*content, scale);
   buildHealthCard(*content, scale);
   buildPeripheralsCard(*content, scale);
@@ -75,6 +96,29 @@ std::unique_ptr<Flex> PowerTab::create() {
   m_root->addChild(std::move(scroll));
 
   return tab;
+}
+
+void PowerTab::buildChargingCard(Flex& root, float scale) {
+  if (m_upower == nullptr) {
+    return;
+  }
+
+  auto card = ui::column({
+      .visible = false,
+      .configure = [scale, opacity = panelCardOpacity()](Flex& section) {
+        applySectionCardStyle(section, scale, opacity);
+      },
+  });
+  m_chargingCard = card.get();
+  card->addChild(makeCardHeaderRow(i18n::tr("control-center.power.charging.title"), scale));
+  card->addChild(
+      ui::column({
+          .out = &m_chargingList,
+          .align = FlexAlign::Stretch,
+          .gap = Style::spaceMd * scale,
+      })
+  );
+  root.addChild(std::move(card));
 }
 
 void PowerTab::buildStatusCard(Flex& root, float scale) {
@@ -310,6 +354,10 @@ void PowerTab::onClose() {
   m_timeLabel = nullptr;
   m_rateRow = nullptr;
   m_rateLabel = nullptr;
+  m_chargingCard = nullptr;
+  m_chargingList = nullptr;
+  m_chargeLimitRows.clear();
+  m_lastChargeLimitKey.clear();
   m_profilesCard = nullptr;
   m_profiles = nullptr;
   m_inhibitedRow = nullptr;
@@ -328,15 +376,187 @@ void PowerTab::doLayout(Renderer& renderer, float contentWidth, float bodyHeight
     return;
   }
   rebuildPeripherals();
+  rebuildChargeLimits();
   m_root->setSize(contentWidth, bodyHeight);
   m_root->layout(renderer);
 }
 
 void PowerTab::doUpdate(Renderer& /*renderer*/) {
   syncBatteryStatus();
+  rebuildChargeLimits();
   syncPowerProfiles();
   syncBatteryHealth();
   rebuildPeripherals();
+}
+
+void PowerTab::rebuildChargeLimits() {
+  if (m_chargingCard == nullptr || m_chargingList == nullptr || m_upower == nullptr) {
+    return;
+  }
+
+  std::vector<UPowerDeviceInfo> batteries;
+  for (auto& device : m_upower->batteryDevices()) {
+    if (device.isLaptopBattery() && device.isPresent) {
+      batteries.push_back(std::move(device));
+    }
+  }
+
+  std::string key = std::to_string(batteries.size()) + ':';
+  for (const auto& battery : batteries) {
+    key += battery.path;
+    key += ';';
+  }
+
+  if (key != m_lastChargeLimitKey) {
+    m_lastChargeLimitKey = key;
+    for (auto& entry : m_chargeLimitRows) {
+      if (entry.row != nullptr) {
+        m_chargingList->removeChild(entry.row);
+      }
+    }
+    m_chargeLimitRows.clear();
+
+    const float scale = contentScale();
+    const bool showNames = batteries.size() > 1;
+    for (const auto& battery : batteries) {
+      ChargeLimitRow entry;
+      entry.path = battery.path;
+      auto row = ui::column({
+          .out = &entry.row,
+          .align = FlexAlign::Stretch,
+          .gap = Style::spaceXs * scale,
+      });
+      row->addChild(
+          ui::label({
+              .out = &entry.nameLabel,
+              .text = deviceDisplayName(battery),
+              .fontSize = Style::fontSizeBody * scale,
+              .fontWeight = FontWeight::Bold,
+              .color = colorSpecFromRole(ColorRole::OnSurface),
+              .maxLines = 1,
+              .ellipsize = TextEllipsize::End,
+              .visible = showNames,
+          })
+      );
+      row->addChild(
+          ui::label({
+              .out = &entry.behaviorLabel,
+              .text = "",
+              .fontSize = Style::fontSizeCaption * scale,
+              .color = colorSpecFromRole(ColorRole::OnSurface),
+          })
+      );
+      row->addChild(
+          ui::label({
+              .out = &entry.configuredLabel,
+              .text = "",
+              .fontSize = Style::fontSizeCaption * scale,
+              .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
+              .visible = false,
+          })
+      );
+      row->addChild(
+          ui::label({
+              .out = &entry.managementLabel,
+              .text = "",
+              .fontSize = Style::fontSizeCaption * scale,
+              .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
+              .visible = false,
+          })
+      );
+      row->addChild(
+          ui::row(
+              {.out = &entry.controlRow, .align = FlexAlign::Center, .gap = Style::spaceSm * scale, .visible = false},
+              ui::label({
+                  .text = i18n::tr("control-center.power.charging.charge-limit"),
+                  .fontSize = Style::fontSizeCaption * scale,
+                  .color = colorSpecFromRole(ColorRole::OnSurface),
+                  .flexGrow = 1.0F,
+              }),
+              ui::toggle({
+                  .out = &entry.toggle,
+                  .checkedImmediate = battery.chargeLimit.enabled,
+                  .toggleSize = ToggleSize::Small,
+                  .scale = scale,
+                  .onChange = [this, path = battery.path](bool checked) {
+                    if (m_upower != nullptr) {
+                      (void)m_upower->enableChargeThreshold(path, checked);
+                    }
+                  },
+              })
+          )
+      );
+      row->addChild(
+          ui::label({
+              .out = &entry.errorLabel,
+              .text = "",
+              .fontSize = Style::fontSizeCaption * scale,
+              .color = colorSpecFromRole(ColorRole::Error),
+              .visible = false,
+          })
+      );
+      m_chargingList->addChild(std::move(row));
+      m_chargeLimitRows.push_back(std::move(entry));
+    }
+  }
+
+  m_chargingCard->setVisible(!batteries.empty());
+  for (std::size_t i = 0; i < batteries.size() && i < m_chargeLimitRows.size(); ++i) {
+    const auto& state = batteries[i].chargeLimit;
+    auto& row = m_chargeLimitRows[i];
+    const ChargeLimitMode mode = classifyChargeLimit(state);
+    const bool permitsFullCharge =
+        state.effectiveEnd == 100U && (!state.effectiveStart.has_value() || state.effectiveStart == 0U);
+    std::string behavior = permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge")
+                                             : thresholdBehavior(state.effectiveStart, state.effectiveEnd);
+    if (behavior.empty()) {
+      if (mode == ChargeLimitMode::FirmwareManaged) {
+        behavior = i18n::tr("control-center.power.charging.firmware-managed");
+      } else {
+        behavior = i18n::tr("control-center.power.charging.unreadable");
+      }
+    }
+    row.behaviorLabel->setText(i18n::tr("control-center.power.charging.effective", "behavior", behavior));
+
+    const std::string configured = thresholdBehavior(state.configuredStart, state.configuredEnd);
+    const bool showConfigured = !configured.empty() && !sameThresholds(state);
+    row.configuredLabel->setVisible(showConfigured);
+    if (showConfigured) {
+      row.configuredLabel->setText(i18n::tr("control-center.power.charging.configured", "limits", configured));
+    }
+
+    std::string management;
+    if (mode == ChargeLimitMode::ExternallyManaged) {
+      management = i18n::tr("control-center.power.charging.externally-managed");
+    } else if (mode == ChargeLimitMode::Unsupported) {
+      management = i18n::tr("control-center.power.charging.unsupported");
+    } else if (mode == ChargeLimitMode::ReadOnly) {
+      management = i18n::tr("control-center.power.charging.display-only");
+    }
+    row.managementLabel->setVisible(!management.empty());
+    if (!management.empty()) {
+      row.managementLabel->setText(management);
+    }
+
+    const ChargeLimitControlState control = chargeLimitControlState(state);
+    row.controlRow->setVisible(control.visible);
+    if (control.visible) {
+      row.toggle->setCheckedImmediate(control.checked);
+      row.toggle->setEnabled(control.enabled);
+    }
+
+    const bool hasError = state.operationError != ChargeLimitOperationError::None;
+    row.errorLabel->setVisible(hasError);
+    if (hasError) {
+      row.errorLabel->setText(
+          i18n::tr(
+              state.operationError == ChargeLimitOperationError::PermissionDenied
+                  ? "control-center.power.charging.error-denied"
+                  : "control-center.power.charging.error-failed"
+          )
+      );
+    }
+  }
 }
 
 void PowerTab::syncBatteryStatus() {
