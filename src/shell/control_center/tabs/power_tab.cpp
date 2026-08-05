@@ -59,7 +59,52 @@ namespace {
     return state.configuredStart == state.effectiveStart && state.configuredEnd == state.effectiveEnd;
   }
 
+  bool hasRestrictiveThreshold(const UPowerChargeLimitState& state) {
+    return (state.effectiveStart.has_value() && *state.effectiveStart > 0U)
+        || (state.effectiveEnd.has_value() && *state.effectiveEnd < 100U);
+  }
+
 } // namespace
+
+PowerTab::ChargeLimitMode PowerTab::classifyChargeLimit(const UPowerChargeLimitState& state) noexcept {
+  if (state.enabledAvailable && !state.enabled && hasRestrictiveThreshold(state)) {
+    return ChargeLimitMode::ExternallyManaged;
+  }
+
+  const bool firmware = state.supportedSettings.has_value() && ((*state.supportedSettings & 4U) != 0U);
+  const bool hasNumericThreshold = state.configuredStart.has_value()
+      || state.configuredEnd.has_value()
+      || state.effectiveStart.has_value()
+      || state.effectiveEnd.has_value();
+  const bool controllable = state.supported && state.methodAvailable && state.enabledAvailable;
+  if (controllable) {
+    if (!state.enabled) {
+      return ChargeLimitMode::UPowerDisabled;
+    }
+    return firmware && !hasNumericThreshold ? ChargeLimitMode::FirmwareManaged : ChargeLimitMode::UPowerActive;
+  }
+
+  if (state.supported && firmware && !hasNumericThreshold) {
+    return ChargeLimitMode::FirmwareManaged;
+  }
+  if (state.supported || hasNumericThreshold) {
+    return ChargeLimitMode::ReadOnly;
+  }
+  return ChargeLimitMode::Unsupported;
+}
+
+PowerTab::ChargeLimitControlState PowerTab::chargeLimitControlState(const UPowerChargeLimitState& state) noexcept {
+  const ChargeLimitMode mode = classifyChargeLimit(state);
+  ChargeLimitControlState control;
+  const bool controllable = state.supported && state.methodAvailable && state.enabledAvailable;
+  control.visible = controllable
+      && (mode == ChargeLimitMode::UPowerActive
+          || mode == ChargeLimitMode::UPowerDisabled
+          || mode == ChargeLimitMode::FirmwareManaged);
+  control.checked = state.requestedEnabled.value_or(state.enabled);
+  control.enabled = control.visible && !state.requestPending;
+  return control;
+}
 
 PowerTab::PowerTab(UPowerService* upower, PowerProfilesService* powerProfiles)
     : m_upower(upower), m_powerProfiles(powerProfiles) {}
@@ -420,7 +465,6 @@ void PowerTab::rebuildChargeLimits() {
     const bool showNames = batteries.size() > 1;
     for (const auto& battery : batteries) {
       ChargeLimitRow entry;
-      entry.path = battery.path;
       auto row = ui::column({
           .out = &entry.row,
           .align = FlexAlign::Stretch,
@@ -505,8 +549,11 @@ void PowerTab::rebuildChargeLimits() {
     const auto& state = batteries[i].chargeLimit;
     auto& row = m_chargeLimitRows[i];
     const ChargeLimitMode mode = classifyChargeLimit(state);
-    const bool permitsFullCharge =
-        state.effectiveEnd == 100U && (!state.effectiveStart.has_value() || state.effectiveStart == 0U);
+    const bool permitsFullCharge = (state.enabledAvailable && !state.enabled && !hasRestrictiveThreshold(state))
+        || (state.effectiveEnd == 100U && (!state.effectiveStart.has_value() || state.effectiveStart == 0U));
+    if (row.nameLabel != nullptr) {
+      row.nameLabel->setText(deviceDisplayName(batteries[i]));
+    }
     std::string behavior = permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge")
                                              : thresholdBehavior(state.effectiveStart, state.effectiveEnd);
     if (behavior.empty()) {
@@ -525,12 +572,13 @@ void PowerTab::rebuildChargeLimits() {
       row.configuredLabel->setText(i18n::tr("control-center.power.charging.configured", "limits", configured));
     }
 
+    const ChargeLimitControlState control = chargeLimitControlState(state);
     std::string management;
     if (mode == ChargeLimitMode::ExternallyManaged) {
       management = i18n::tr("control-center.power.charging.externally-managed");
     } else if (mode == ChargeLimitMode::Unsupported) {
       management = i18n::tr("control-center.power.charging.unsupported");
-    } else if (mode == ChargeLimitMode::ReadOnly) {
+    } else if (mode == ChargeLimitMode::ReadOnly || (mode == ChargeLimitMode::FirmwareManaged && !control.visible)) {
       management = i18n::tr("control-center.power.charging.display-only");
     }
     row.managementLabel->setVisible(!management.empty());
@@ -538,7 +586,6 @@ void PowerTab::rebuildChargeLimits() {
       row.managementLabel->setText(management);
     }
 
-    const ChargeLimitControlState control = chargeLimitControlState(state);
     row.controlRow->setVisible(control.visible);
     if (control.visible) {
       row.toggle->setCheckedImmediate(control.checked);

@@ -482,6 +482,7 @@ _noctalia_sources = files(
   'src/dbus/system_bus.cpp',
   'src/dbus/tray/fcitx_status.cpp',
   'src/dbus/tray/tray_service.cpp',
+  'src/dbus/upower/upower_charge_limit_support.cpp',
   'src/dbus/upower/upower_service.cpp',
   'src/debug/debug_service.cpp',
   'src/i18n/i18n.cpp',
@@ -1177,6 +1178,22 @@ if build_tests
     )
     test(test_name, test_exe)
   endforeach
+
+  upower_integration_exe = executable('upower_charge_limit_integration_test',
+    sources: files('tests/upower_charge_limit_integration_test.cpp'),
+    dependencies: noctalia_core_dep,
+  )
+  dbus_run_session = find_program('dbus-run-session', required: false)
+  if dbus_run_session.found()
+    test('upower_charge_limit_integration',
+      dbus_run_session,
+      args: [
+        '--', 'sh', '-c',
+        'export DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"; exec "$1"',
+        'sh', upower_integration_exe.full_path(),
+      ],
+    )
+  endif
 
   config_validate_env = environment()
   config_validate_env.set('NOCTALIA_CONFIG_HOME', meson.current_source_dir() / 'tests/config_validate/config-home')

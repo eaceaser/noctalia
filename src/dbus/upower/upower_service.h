@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -64,23 +63,6 @@ enum class ChargeLimitOperationError : std::uint8_t {
   Failed,
 };
 
-enum class ChargeLimitMode : std::uint8_t {
-  Unsupported,
-  UPowerActive,
-  UPowerDisabled,
-  ExternallyManaged,
-  FirmwareManaged,
-  ReadOnly,
-};
-
-struct ChargeThresholdProbe {
-  bool nativePathValid = false;
-  std::optional<std::uint32_t> start;
-  std::optional<std::uint32_t> end;
-
-  bool operator==(const ChargeThresholdProbe&) const = default;
-};
-
 struct UPowerChargeLimitState {
   // Values configured in UPower. They are presets, not necessarily what the kernel currently applies.
   std::optional<std::uint32_t> configuredStart;
@@ -89,33 +71,16 @@ struct UPowerChargeLimitState {
   std::optional<std::uint32_t> effectiveStart;
   std::optional<std::uint32_t> effectiveEnd;
   std::optional<std::uint32_t> supportedSettings;
-  bool capabilityAvailable = false;
   bool supported = false;
   bool methodAvailable = false;
   bool enabledAvailable = false;
   bool enabled = false;
-  bool effectivePathValid = false;
   bool requestPending = false;
   std::optional<bool> requestedEnabled;
   ChargeLimitOperationError operationError = ChargeLimitOperationError::None;
 
   bool operator==(const UPowerChargeLimitState&) const = default;
 };
-
-struct ChargeLimitControlState {
-  bool visible = false;
-  bool checked = false;
-  bool enabled = false;
-
-  bool operator==(const ChargeLimitControlState&) const = default;
-};
-
-[[nodiscard]] ChargeThresholdProbe readChargeThresholdsFromSysfs(
-    std::string_view nativePath, const std::filesystem::path& powerSupplyRoot = "/sys/class/power_supply"
-);
-[[nodiscard]] bool chargeLimitIsRestrictive(const UPowerChargeLimitState& state) noexcept;
-[[nodiscard]] ChargeLimitMode classifyChargeLimit(const UPowerChargeLimitState& state) noexcept;
-[[nodiscard]] ChargeLimitControlState chargeLimitControlState(const UPowerChargeLimitState& state) noexcept;
 
 [[nodiscard]] std::string batteryStateLabel(BatteryState state);
 
@@ -161,7 +126,12 @@ struct UPowerDeviceInfo {
 
 class UPowerService {
 public:
-  using ChangeCallback = std::function<void()>;
+  enum class ChangeOrigin : std::uint8_t {
+    DeviceState,
+    ChargeLimit,
+  };
+
+  using ChangeCallback = std::function<void(ChangeOrigin)>;
 
   explicit UPowerService(SystemBus& bus);
   ~UPowerService();
@@ -185,15 +155,18 @@ private:
   struct TrackedDevice {
     UPowerDeviceInfo info;
     std::shared_ptr<sdbus::IProxy> proxy;
+    std::optional<bool> chargeThresholdMethodAvailable;
+    std::optional<std::uint64_t> chargeThresholdRequestId;
   };
 
   [[nodiscard]] UPowerState readDefaultState() const;
   [[nodiscard]] UPowerState readDeviceState(sdbus::IProxy& proxy) const;
-  [[nodiscard]] UPowerDeviceInfo readDeviceInfo(
-      std::string path, sdbus::IProxy& proxy, std::optional<bool> chargeThresholdMethodAvailable = std::nullopt
-  ) const;
+  [[nodiscard]] UPowerDeviceInfo
+  readDeviceInfo(std::string path, sdbus::IProxy& proxy, std::optional<bool>& chargeThresholdMethodAvailable) const;
   void refreshDisplayDeviceProxy();
-  void emitChangedIfNeeded(bool devicesChanged);
+  void emitChangedIfNeeded(bool devicesChanged, bool chargeLimitChanged = false);
+  void emitControlOperationChanged();
+  void invalidateChargeThresholdRequest(std::string_view devicePath);
   void rescanDevices();
   void refreshDeviceStates();
 
@@ -206,4 +179,5 @@ private:
   UPowerState m_state;
   ChangeCallback m_changeCallback;
   std::shared_ptr<int> m_lifetimeToken = std::make_shared<int>(0);
+  std::uint64_t m_nextChargeThresholdRequestId = 1;
 };

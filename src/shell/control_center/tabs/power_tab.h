@@ -2,6 +2,7 @@
 
 #include "shell/control_center/tab.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,8 @@ class Segmented;
 class Toggle;
 class UPowerService;
 class PowerProfilesService;
+class PowerTabTestAccess;
+struct UPowerChargeLimitState;
 
 class PowerTab : public Tab {
 public:
@@ -23,6 +26,28 @@ public:
   void onClose() override;
 
 private:
+  friend class PowerTabTestAccess;
+
+  enum class ChargeLimitMode : std::uint8_t {
+    Unsupported,
+    UPowerActive,
+    UPowerDisabled,
+    ExternallyManaged,
+    FirmwareManaged,
+    ReadOnly,
+  };
+
+  struct ChargeLimitControlState {
+    bool visible = false;
+    bool checked = false;
+    bool enabled = false;
+
+    bool operator==(const ChargeLimitControlState&) const = default;
+  };
+
+  [[nodiscard]] static ChargeLimitMode classifyChargeLimit(const UPowerChargeLimitState& state) noexcept;
+  [[nodiscard]] static ChargeLimitControlState chargeLimitControlState(const UPowerChargeLimitState& state) noexcept;
+
   void doLayout(Renderer& renderer, float contentWidth, float bodyHeight) override;
   void doUpdate(Renderer& renderer) override;
 
@@ -58,7 +83,6 @@ private:
   Flex* m_chargingCard = nullptr;
   Flex* m_chargingList = nullptr;
   struct ChargeLimitRow {
-    std::string path;
     Flex* row = nullptr;
     Label* nameLabel = nullptr;
     Label* behaviorLabel = nullptr;
