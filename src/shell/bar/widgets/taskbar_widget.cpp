@@ -1504,18 +1504,6 @@ void TaskbarWidget::updateModels() {
     });
   }
 
-  std::unordered_set<std::string> currentNiriWindowIds;
-  const std::unordered_set<std::string>* allowedNiriWindowIds = nullptr;
-  if (compositors::isNiri()) {
-    currentNiriWindowIds.reserve(workspaceAssignments.size());
-    for (const auto& assignment : workspaceAssignments) {
-      if (!assignment.windowId.empty()) {
-        currentNiriWindowIds.insert(assignment.windowId);
-      }
-    }
-    allowedNiriWindowIds = &currentNiriWindowIds;
-  }
-
   std::vector<std::string> running = m_platform.runningAppIds(topFilter);
   if (compositors::isHyprland() || compositors::isKde()) {
     std::unordered_set<std::string> seenApps(running.begin(), running.end());
@@ -1535,7 +1523,7 @@ void TaskbarWidget::updateModels() {
         !run.entry.startupWmClass.empty() ? toLower(run.entry.startupWmClass) : run.runningLower;
     const std::string nameLower = !run.entry.nameLower.empty() ? run.entry.nameLower : run.runningLower;
 
-    const auto windows = m_platform.taskbarWindowsForApp(idLower, startupLower, topFilter, allowedNiriWindowIds);
+    const auto windows = m_platform.taskbarWindowsForApp(idLower, startupLower, topFilter);
     for (const auto& window : windows) {
       const auto handleKey = taskHandleKey(window);
       if (handleKey == 0 || !processedHandles.insert(handleKey).second) {
@@ -1566,7 +1554,7 @@ void TaskbarWidget::updateModels() {
   }
 
   // Windows with no app id still get a task keyed by toplevel handle / window id.
-  for (const auto& window : m_platform.taskbarWindowsWithoutAppId(topFilter, allowedNiriWindowIds)) {
+  for (const auto& window : m_platform.taskbarWindowsWithoutAppId(topFilter)) {
     // Skip anonymous XWayland menu popups (no app id and no title to show).
     if (window.title.empty()) {
       continue;
@@ -2344,8 +2332,7 @@ void TaskbarWidget::updateModels() {
       for (const auto& appId : *list) {
         const std::string appLower = toLower(appId);
         const std::string startupWmClassLower = toLower(appId);
-        const auto windows =
-            m_platform.taskbarWindowsForApp(appLower, startupWmClassLower, topFilter, allowedNiriWindowIds);
+        const auto windows = m_platform.taskbarWindowsForApp(appLower, startupWmClassLower, topFilter);
         if (windows.empty()) {
           continue;
         }

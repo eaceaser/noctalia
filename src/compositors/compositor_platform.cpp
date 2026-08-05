@@ -893,19 +893,14 @@ std::vector<ToplevelInfo> CompositorPlatform::windowsWithoutAppId(wl_output* out
 }
 
 std::vector<ToplevelInfo> CompositorPlatform::taskbarWindowsForApp(
-    const std::string& idLower, const std::string& wmClassLower, wl_output* outputFilter,
-    const std::unordered_set<std::string>* allowedNiriWindowIds
+    const std::string& idLower, const std::string& wmClassLower, wl_output* outputFilter
 ) const {
   if (compositors::isNiri() && m_wayland.hasExtForeignToplevelList()) {
     // Niri exposes its numeric IPC window ID as the ext-foreign-toplevel
     // identifier, providing an exact association even for duplicate titles.
     auto windows = m_wayland.extWindowsForApp(idLower, wmClassLower);
     if (!windows.empty()) {
-      if (allowedNiriWindowIds != nullptr) {
-        retainToplevelsWithWindowIds(windows, *allowedNiriWindowIds);
-      } else {
-        retainToplevelsWithWindowIds(windows, windowIdsFromAssignments(workspaceWindowAssignments(outputFilter)));
-      }
+      retainToplevelsWithWindowIds(windows, windowIdsFromAssignments(workspaceWindowAssignments(outputFilter)));
     }
     // Do not fall back to title/app-id matching while one side of the exact
     // Niri-id join is still pending. The ext `done` or IPC update will retry.
@@ -914,17 +909,11 @@ std::vector<ToplevelInfo> CompositorPlatform::taskbarWindowsForApp(
   return windowsForApp(idLower, wmClassLower, outputFilter);
 }
 
-std::vector<ToplevelInfo> CompositorPlatform::taskbarWindowsWithoutAppId(
-    wl_output* outputFilter, const std::unordered_set<std::string>* allowedNiriWindowIds
-) const {
+std::vector<ToplevelInfo> CompositorPlatform::taskbarWindowsWithoutAppId(wl_output* outputFilter) const {
   if (compositors::isNiri() && m_wayland.hasExtForeignToplevelList()) {
     auto windows = m_wayland.extWindowsWithoutAppId();
     if (!windows.empty()) {
-      if (allowedNiriWindowIds != nullptr) {
-        retainToplevelsWithWindowIds(windows, *allowedNiriWindowIds);
-      } else {
-        retainToplevelsWithWindowIds(windows, windowIdsFromAssignments(workspaceWindowAssignments(outputFilter)));
-      }
+      retainToplevelsWithWindowIds(windows, windowIdsFromAssignments(workspaceWindowAssignments(outputFilter)));
     }
     return windows;
   }
