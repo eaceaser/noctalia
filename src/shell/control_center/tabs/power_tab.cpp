@@ -88,8 +88,8 @@ std::unique_ptr<Flex> PowerTab::create() {
   content->setGap(Style::spaceMd * scale);
 
   buildStatusCard(*content, scale);
-  buildChargingCard(*content, scale);
   buildProfilesCard(*content, scale);
+  buildChargingCard(*content, scale);
   buildHealthCard(*content, scale);
   buildPeripheralsCard(*content, scale);
 
@@ -468,7 +468,7 @@ void PowerTab::rebuildChargeLimits() {
           ui::row(
               {.out = &entry.controlRow, .align = FlexAlign::Center, .gap = Style::spaceSm * scale, .visible = false},
               ui::label({
-                  .text = i18n::tr("control-center.power.charging.charge-limit"),
+                  .text = i18n::tr("control-center.power.charging.battery-protection"),
                   .fontSize = Style::fontSizeCaption * scale,
                   .color = colorSpecFromRole(ColorRole::OnSurface),
                   .flexGrow = 1.0F,
