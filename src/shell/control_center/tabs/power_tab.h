@@ -47,6 +47,7 @@ private:
 
   [[nodiscard]] static ChargeLimitMode classifyChargeLimit(const UPowerChargeLimitState& state) noexcept;
   [[nodiscard]] static ChargeLimitControlState chargeLimitControlState(const UPowerChargeLimitState& state) noexcept;
+  [[nodiscard]] static bool shouldShowChargeLimit(const UPowerChargeLimitState& state) noexcept;
 
   void doLayout(Renderer& renderer, float contentWidth, float bodyHeight) override;
   void doUpdate(Renderer& renderer) override;

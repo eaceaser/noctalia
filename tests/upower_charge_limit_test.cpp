@@ -43,6 +43,8 @@ public:
     const auto result = PowerTab::chargeLimitControlState(state);
     return {result.visible, result.checked, result.enabled};
   }
+
+  static bool visible(const UPowerChargeLimitState& state) { return PowerTab::shouldShowChargeLimit(state); }
 };
 
 namespace {
@@ -137,6 +139,11 @@ int main() {
   UPowerChargeLimitState state;
   using Mode = PowerTabTestAccess::Mode;
   assert(PowerTabTestAccess::mode(state) == Mode::Unsupported);
+  assert(!PowerTabTestAccess::visible(state));
+
+  state.supported = true;
+  assert(PowerTabTestAccess::mode(state) == Mode::ReadOnly);
+  assert(!PowerTabTestAccess::visible(state));
 
   state = supportedState(true);
   state.supportedSettings = 3U;
@@ -145,6 +152,7 @@ int main() {
   state.effectiveStart = 75U;
   state.effectiveEnd = 80U;
   assert(PowerTabTestAccess::mode(state) == Mode::UPowerActive);
+  assert(PowerTabTestAccess::visible(state));
 
   state = supportedState(false);
   state.effectiveStart = 0U;
@@ -166,6 +174,7 @@ int main() {
   state = supportedState(true);
   state.supportedSettings = 4U;
   assert(PowerTabTestAccess::mode(state) == Mode::FirmwareManaged);
+  assert(PowerTabTestAccess::visible(state));
 
   state.methodAvailable = false;
   assert(PowerTabTestAccess::mode(state) == Mode::FirmwareManaged);
@@ -192,6 +201,7 @@ int main() {
   state = {};
   state.effectiveStart = 70U;
   assert(PowerTabTestAccess::mode(state) == Mode::ReadOnly);
+  assert(PowerTabTestAccess::visible(state));
 
   state = supportedState(true);
   state.configuredStart = 70U;

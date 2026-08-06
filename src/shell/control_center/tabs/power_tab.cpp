@@ -106,6 +106,15 @@ PowerTab::ChargeLimitControlState PowerTab::chargeLimitControlState(const UPower
   return control;
 }
 
+bool PowerTab::shouldShowChargeLimit(const UPowerChargeLimitState& state) noexcept {
+  const bool hasNumericThreshold = state.configuredStart.has_value()
+      || state.configuredEnd.has_value()
+      || state.effectiveStart.has_value()
+      || state.effectiveEnd.has_value();
+  const bool firmwareManaged = state.supportedSettings.has_value() && ((*state.supportedSettings & 4U) != 0U);
+  return hasNumericThreshold || firmwareManaged || chargeLimitControlState(state).visible;
+}
+
 PowerTab::PowerTab(UPowerService* upower, PowerProfilesService* powerProfiles)
     : m_upower(upower), m_powerProfiles(powerProfiles) {}
 
@@ -441,7 +450,7 @@ void PowerTab::rebuildChargeLimits() {
 
   std::vector<UPowerDeviceInfo> batteries;
   for (auto& device : m_upower->batteryDevices()) {
-    if (device.isLaptopBattery() && device.isPresent) {
+    if (device.isLaptopBattery() && device.isPresent && shouldShowChargeLimit(device.chargeLimit)) {
       batteries.push_back(std::move(device));
     }
   }

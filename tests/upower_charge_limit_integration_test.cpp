@@ -58,22 +58,27 @@ namespace {
               sdbus::registerProperty("Energy").withGetter([]() { return 30.0; }),
               sdbus::registerProperty("ChargeThresholdSupported").withGetter([this]() {
                 bool shouldUnregister = false;
+                bool supported = false;
                 {
                   std::lock_guard lock(stateMutex);
                   ++supportedReads;
                   shouldUnregister = unregisterBeforeFirstIntrospection && supportedReads == 1;
+                  supported = thresholdSupported;
                 }
                 if (shouldUnregister) {
                   object->unregister();
                 }
-                return true;
+                return supported;
               }),
               sdbus::registerProperty("ChargeThresholdEnabled").withGetter([this]() {
                 std::lock_guard lock(stateMutex);
                 ++enabledReads;
                 return thresholdEnabled;
               }),
-              sdbus::registerProperty("ChargeThresholdSettingsSupported").withGetter([]() { return std::uint32_t{3}; }),
+              sdbus::registerProperty("ChargeThresholdSettingsSupported").withGetter([this]() {
+                std::lock_guard lock(stateMutex);
+                return supportedSettings;
+              }),
               sdbus::registerProperty("ChargeStartThreshold").withGetter([]() { return std::uint32_t{75}; }),
               sdbus::registerProperty("ChargeEndThreshold").withGetter([]() { return std::uint32_t{80}; })
           )
@@ -107,6 +112,12 @@ namespace {
       assert(!chargeMethodRegistered);
       chargeMethodRegistered = true;
       registerChargeMethodVTable();
+    }
+
+    void disableThresholdSupport() {
+      std::lock_guard lock(stateMutex);
+      thresholdSupported = false;
+      supportedSettings = 0;
     }
 
     void completeSuccess(bool enabled) {
@@ -154,7 +165,9 @@ namespace {
     mutable std::mutex stateMutex;
     bool chargeMethodRegistered = true;
     bool unregisterBeforeFirstIntrospection = false;
+    bool thresholdSupported = true;
     bool thresholdEnabled = false;
+    std::uint32_t supportedSettings = 3;
     double percentage = 55.0;
     int supportedReads = 0;
     int enabledReads = 0;
@@ -323,6 +336,8 @@ int main() {
   }
   fake.removeBattery(retryBattery);
   fake.removeBattery(unsupportedMethod);
+  auto& hiddenBattery = fake.addBattery("UNSUPPORTED", "Unsupported Battery");
+  hiddenBattery.disableThresholdSupport();
 
   SystemBus bus;
   {
@@ -345,6 +360,7 @@ int main() {
     assert(PowerTabTestAccess::nameVisible(tab, 1));
     assert(PowerTabTestAccess::name(tab, 0) == "Primary Battery");
     assert(PowerTabTestAccess::name(tab, 1) == "Secondary Battery");
+    assert(findBattery(service, hiddenBattery.path) != nullptr);
     assert(PowerTabTestAccess::behavior(tab, 0) == "Starts below 75% · Stops at 80%");
     assert(PowerTabTestAccess::behaviorOpacity(tab, 0) < 1.0F);
     assert(!PowerTabTestAccess::configuredVisible(tab, 0));
