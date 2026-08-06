@@ -49,7 +49,11 @@ namespace {
               sdbus::registerProperty("PowerSupply").withGetter([this]() { return this->powerSupply; }),
               sdbus::registerProperty("EnergyFull").withGetter([]() { return 50.0; }),
               sdbus::registerProperty("EnergyFullDesign").withGetter([]() { return 55.0; }),
-              sdbus::registerProperty("Percentage").withGetter([this]() { return percentage; }),
+              sdbus::registerProperty("Percentage").withGetter([this]() {
+                std::lock_guard lock(stateMutex);
+                ++percentageReads;
+                return percentage;
+              }),
               sdbus::registerProperty("IsPresent").withGetter([this]() { return present; }),
               sdbus::registerProperty("State").withGetter([]() { return std::uint32_t{2}; }),
               sdbus::registerProperty("TimeToEmpty").withGetter([]() { return std::int64_t{7200}; }),
@@ -144,6 +148,15 @@ namespace {
     }
 
     void emitChanged() { object->emitPropertiesChangedSignal(kDeviceInterface); }
+    void emitChanged(std::string property) {
+      object->emitPropertiesChangedSignal(
+          kDeviceInterface, std::vector<sdbus::PropertyName>{sdbus::PropertyName{std::move(property)}}
+      );
+    }
+    void setPercentage(double value) {
+      std::lock_guard lock(stateMutex);
+      percentage = value;
+    }
     std::size_t pendingCount() const {
       std::lock_guard lock(stateMutex);
       return pendingResults.size();
@@ -155,6 +168,10 @@ namespace {
     int enabledReadCount() const {
       std::lock_guard lock(stateMutex);
       return enabledReads;
+    }
+    int percentageReadCount() const {
+      std::lock_guard lock(stateMutex);
+      return percentageReads;
     }
     sdbus::IConnection& connection;
     std::string path;
@@ -171,6 +188,7 @@ namespace {
     double percentage = 55.0;
     int supportedReads = 0;
     int enabledReads = 0;
+    int percentageReads = 0;
     std::vector<sdbus::Result<>> pendingResults;
     std::unique_ptr<sdbus::IObject> object;
   };
@@ -368,6 +386,31 @@ int main() {
     assert(PowerTabTestAccess::controlVisible(tab, 0));
     assert(mouse.supportedReadCount() == 0);
     assert(mouse.enabledReadCount() == 0);
+
+    const int bat0SupportedBeforePercentage = bat0.supportedReadCount();
+    const int bat0PercentageBeforePercentage = bat0.percentageReadCount();
+    const int bat1SupportedBeforePercentage = bat1.supportedReadCount();
+    const int bat1PercentageBeforePercentage = bat1.percentageReadCount();
+    bat0.setPercentage(57.0);
+    bat0.emitChanged("Percentage");
+    drainUntil(bus, [&]() {
+      const auto* current = service.deviceForSelector(bat0.path);
+      return current != nullptr && current->state.percentage == 57.0;
+    });
+    assert(bat0.percentageReadCount() > bat0PercentageBeforePercentage);
+    assert(bat0.supportedReadCount() == bat0SupportedBeforePercentage);
+    assert(bat1.percentageReadCount() == bat1PercentageBeforePercentage);
+    assert(bat1.supportedReadCount() == bat1SupportedBeforePercentage);
+
+    const int bat0SupportedBeforeThreshold = bat0.supportedReadCount();
+    const int bat1SupportedBeforeThreshold = bat1.supportedReadCount();
+    const int bat1PercentageBeforeThreshold = bat1.percentageReadCount();
+    bat0.emitChanged("ChargeThresholdEnabled");
+    drainUntil(bus, [&]() { return bat0.supportedReadCount() > bat0SupportedBeforeThreshold; });
+    assert(bat1.supportedReadCount() == bat1SupportedBeforeThreshold);
+    assert(bat1.percentageReadCount() == bat1PercentageBeforeThreshold);
+    deviceChanges = 0;
+    chargeLimitChanges = 0;
 
     const auto* initial = findBattery(service, bat0.path);
     assert(initial != nullptr);

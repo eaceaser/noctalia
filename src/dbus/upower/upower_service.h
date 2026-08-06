@@ -166,13 +166,20 @@ private:
 
   [[nodiscard]] UPowerState readDefaultState() const;
   [[nodiscard]] UPowerState readDeviceState(sdbus::IProxy& proxy) const;
+  [[nodiscard]] UPowerDeviceInfo readDeviceInfoBase(std::string path, sdbus::IProxy& proxy) const;
+  [[nodiscard]] UPowerChargeLimitState readChargeLimitState(
+      const UPowerDeviceInfo& info, sdbus::IProxy& proxy, std::optional<bool>& chargeThresholdMethodAvailable
+  ) const;
   [[nodiscard]] UPowerDeviceInfo
   readDeviceInfo(std::string path, sdbus::IProxy& proxy, std::optional<bool>& chargeThresholdMethodAvailable) const;
   void refreshDisplayDeviceProxy();
+  [[nodiscard]] bool refreshDefaultState();
   void emitChangedIfNeeded(bool devicesChanged, bool chargeLimitChanged = false);
   void emitControlOperationChanged();
   void invalidateChargeThresholdRequest(std::string_view devicePath);
   void rescanDevices();
+  [[nodiscard]] RefreshChanges refreshDevice(std::string_view devicePath, bool refreshChargeLimit);
+  [[nodiscard]] RefreshChanges refreshTrackedDevice(TrackedDevice& device, bool refreshChargeLimit);
   [[nodiscard]] RefreshChanges refreshDeviceStates();
 
   SystemBus& m_bus;
