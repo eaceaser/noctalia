@@ -159,6 +159,11 @@ private:
     std::optional<std::uint64_t> chargeThresholdRequestId;
   };
 
+  struct RefreshChanges {
+    bool devicesChanged = false;
+    bool chargeLimitChanged = false;
+  };
+
   [[nodiscard]] UPowerState readDefaultState() const;
   [[nodiscard]] UPowerState readDeviceState(sdbus::IProxy& proxy) const;
   [[nodiscard]] UPowerDeviceInfo
@@ -168,7 +173,7 @@ private:
   void emitControlOperationChanged();
   void invalidateChargeThresholdRequest(std::string_view devicePath);
   void rescanDevices();
-  void refreshDeviceStates();
+  [[nodiscard]] RefreshChanges refreshDeviceStates();
 
   SystemBus& m_bus;
   std::unique_ptr<sdbus::IProxy> m_upowerProxy;

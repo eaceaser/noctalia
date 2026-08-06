@@ -67,7 +67,7 @@ namespace {
 } // namespace
 
 PowerTab::ChargeLimitMode PowerTab::classifyChargeLimit(const UPowerChargeLimitState& state) noexcept {
-  if (state.enabledAvailable && !state.enabled && hasRestrictiveThreshold(state)) {
+  if (!state.requestPending && state.enabledAvailable && !state.enabled && hasRestrictiveThreshold(state)) {
     return ChargeLimitMode::ExternallyManaged;
   }
 
@@ -557,8 +557,9 @@ void PowerTab::rebuildChargeLimits() {
     const ChargeLimitControlState control = chargeLimitControlState(state);
     const std::string effective = thresholdBehavior(state.effectiveStart, state.effectiveEnd);
     const std::string configured = thresholdBehavior(state.configuredStart, state.configuredEnd);
-    const bool presentConfiguredAsPrimary =
-        control.visible && !configured.empty() && (!control.checked || effective.empty());
+    // For a controllable device this line describes the preset controlled by the toggle. Keep it
+    // stable while the asynchronous operation changes the effective kernel values underneath it.
+    const bool presentConfiguredAsPrimary = control.visible && !configured.empty();
     std::string behavior = presentConfiguredAsPrimary
         ? configured
         : (permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge") : effective);

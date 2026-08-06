@@ -277,6 +277,15 @@ public:
   static std::string behavior(const PowerTab& tab, std::size_t index) {
     return tab.m_chargeLimitRows.at(index).behaviorLabel->text();
   }
+  static bool configuredVisible(const PowerTab& tab, std::size_t index) {
+    return tab.m_chargeLimitRows.at(index).configuredLabel->visible();
+  }
+  static bool managementVisible(const PowerTab& tab, std::size_t index) {
+    return tab.m_chargeLimitRows.at(index).managementLabel->visible();
+  }
+  static bool controlVisible(const PowerTab& tab, std::size_t index) {
+    return tab.m_chargeLimitRows.at(index).controlRow->visible();
+  }
   static float behaviorOpacity(const PowerTab& tab, std::size_t index) {
     return tab.m_chargeLimitRows.at(index).behaviorLabel->color().a;
   }
@@ -338,6 +347,9 @@ int main() {
     assert(PowerTabTestAccess::name(tab, 1) == "Secondary Battery");
     assert(PowerTabTestAccess::behavior(tab, 0) == "Starts below 75% · Stops at 80%");
     assert(PowerTabTestAccess::behaviorOpacity(tab, 0) < 1.0F);
+    assert(!PowerTabTestAccess::configuredVisible(tab, 0));
+    assert(!PowerTabTestAccess::managementVisible(tab, 0));
+    assert(PowerTabTestAccess::controlVisible(tab, 0));
     assert(mouse.supportedReadCount() == 0);
     assert(mouse.enabledReadCount() == 0);
 
@@ -355,7 +367,12 @@ int main() {
     PowerTabTestAccess::rebuild(tab);
     assert(PowerTabTestAccess::toggleChecked(tab, 0));
     assert(!PowerTabTestAccess::toggleEnabled(tab, 0));
+    assert(PowerTabTestAccess::behavior(tab, 0) == "Starts below 75% · Stops at 80%");
+    assert(!PowerTabTestAccess::configuredVisible(tab, 0));
+    assert(!PowerTabTestAccess::managementVisible(tab, 0));
+    assert(PowerTabTestAccess::controlVisible(tab, 0));
 
+    const int changesBeforeSuccess = chargeLimitChanges;
     bat0.completeSuccess(true);
     drainUntil(bus, [&]() {
       const auto* current = findBattery(service, bat0.path);
@@ -365,7 +382,7 @@ int main() {
     assert(info != nullptr && !info->chargeLimit.requestedEnabled.has_value());
     assert(info->chargeLimit.operationError == ChargeLimitOperationError::None);
     assert(deviceChanges == 0);
-    assert(chargeLimitChanges >= 1);
+    assert(chargeLimitChanges == changesBeforeSuccess + 1);
     PowerTabTestAccess::rebuild(tab);
     assert(PowerTabTestAccess::toggleChecked(tab, 0));
     assert(PowerTabTestAccess::toggleEnabled(tab, 0));

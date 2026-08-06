@@ -158,6 +158,11 @@ int main() {
   state.effectiveEnd = 80U;
   assert(PowerTabTestAccess::mode(state) == Mode::ExternallyManaged);
 
+  state.requestPending = true;
+  state.requestedEnabled = false;
+  assert(PowerTabTestAccess::mode(state) == Mode::UPowerDisabled);
+  assert(PowerTabTestAccess::control(state) == std::tuple(true, false, false));
+
   state = supportedState(true);
   state.supportedSettings = 4U;
   assert(PowerTabTestAccess::mode(state) == Mode::FirmwareManaged);

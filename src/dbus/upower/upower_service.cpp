@@ -286,7 +286,10 @@ UPowerService::~UPowerService() { m_lifetimeToken.reset(); }
 
 void UPowerService::setChangeCallback(ChangeCallback callback) { m_changeCallback = std::move(callback); }
 
-void UPowerService::refresh() { refreshDeviceStates(); }
+void UPowerService::refresh() {
+  const auto changes = refreshDeviceStates();
+  emitChangedIfNeeded(changes.devicesChanged, changes.chargeLimitChanged);
+}
 
 std::vector<UPowerDeviceInfo> UPowerService::batteryDevices() const {
   std::vector<UPowerDeviceInfo> devices;
@@ -535,7 +538,7 @@ bool UPowerService::enableChargeThreshold(std::string_view devicePath, bool enab
 
           // Refresh on every completion: UPower may have changed a subset of the hardware state even
           // when the method reports an error.
-          refreshDeviceStates();
+          auto changes = refreshDeviceStates();
           const auto refreshed = std::ranges::find_if(m_devices, [&path](const TrackedDevice& device) {
             return device.info.path == path;
           });
@@ -550,7 +553,8 @@ bool UPowerService::enableChargeThreshold(std::string_view devicePath, bool enab
             if (error.has_value()) {
               kLog.warn("charge threshold change failed device={} err={}", path, error->what());
             }
-            emitControlOperationChanged();
+            changes.chargeLimitChanged = true;
+            emitChangedIfNeeded(changes.devicesChanged, changes.chargeLimitChanged);
           }
         });
   } catch (const sdbus::Error& error) {
@@ -655,25 +659,24 @@ void UPowerService::refreshDisplayDeviceProxy() {
   }
 }
 
-void UPowerService::refreshDeviceStates() {
-  bool devicesChanged = false;
-  bool chargeLimitChanged = false;
+UPowerService::RefreshChanges UPowerService::refreshDeviceStates() {
+  RefreshChanges changes;
   for (auto& device : m_devices) {
     auto next = readDeviceInfo(device.info.path, *device.proxy, device.chargeThresholdMethodAvailable);
     next.chargeLimit.requestPending = device.info.chargeLimit.requestPending;
     next.chargeLimit.requestedEnabled = device.info.chargeLimit.requestedEnabled;
     next.chargeLimit.operationError = device.info.chargeLimit.operationError;
     if (!sameDeviceInfoExceptChargeLimit(next, device.info)) {
-      devicesChanged = true;
+      changes.devicesChanged = true;
     }
     if (next.chargeLimit != device.info.chargeLimit) {
-      chargeLimitChanged = true;
+      changes.chargeLimitChanged = true;
     }
     if (next != device.info) {
       device.info = std::move(next);
     }
   }
-  emitChangedIfNeeded(devicesChanged, chargeLimitChanged);
+  return changes;
 }
 
 void UPowerService::emitChangedIfNeeded(bool devicesChanged, bool chargeLimitChanged) {
