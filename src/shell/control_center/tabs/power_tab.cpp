@@ -97,12 +97,13 @@ PowerTab::ChargeLimitControlState PowerTab::chargeLimitControlState(const UPower
   const ChargeLimitMode mode = classifyChargeLimit(state);
   ChargeLimitControlState control;
   const bool controllable = state.supported && state.methodAvailable && state.enabledAvailable;
-  control.visible = controllable
-      && (mode == ChargeLimitMode::UPowerActive
-          || mode == ChargeLimitMode::UPowerDisabled
-          || mode == ChargeLimitMode::FirmwareManaged);
-  control.checked = state.requestedEnabled.value_or(state.enabled);
-  control.enabled = control.visible && !state.requestPending;
+  control.visible = mode == ChargeLimitMode::ExternallyManaged
+      || (controllable
+          && (mode == ChargeLimitMode::UPowerActive
+              || mode == ChargeLimitMode::UPowerDisabled
+              || mode == ChargeLimitMode::FirmwareManaged));
+  control.checked = mode == ChargeLimitMode::ExternallyManaged ? true : state.requestedEnabled.value_or(state.enabled);
+  control.enabled = control.visible && mode != ChargeLimitMode::ExternallyManaged && !state.requestPending;
   return control;
 }
 
@@ -509,18 +510,10 @@ void PowerTab::rebuildChargeLimits() {
           })
       );
       row->addChild(
-          ui::label({
-              .out = &entry.managementLabel,
-              .text = "",
-              .fontSize = Style::fontSizeCaption * scale,
-              .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-              .visible = false,
-          })
-      );
-      row->addChild(
           ui::row(
               {.out = &entry.controlRow, .align = FlexAlign::Center, .gap = Style::spaceSm * scale, .visible = false},
               ui::label({
+                  .out = &entry.controlLabel,
                   .text = i18n::tr("control-center.power.charging.use-thresholds"),
                   .fontSize = Style::fontSizeCaption * scale,
                   .color = colorSpecFromRole(ColorRole::OnSurface),
@@ -538,6 +531,15 @@ void PowerTab::rebuildChargeLimits() {
                   },
               })
           )
+      );
+      row->addChild(
+          ui::label({
+              .out = &entry.managementLabel,
+              .text = "",
+              .fontSize = Style::fontSizeCaption * scale,
+              .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
+              .visible = false,
+          })
       );
       row->addChild(
           ui::label({
@@ -566,8 +568,9 @@ void PowerTab::rebuildChargeLimits() {
     const ChargeLimitControlState control = chargeLimitControlState(state);
     const std::string effective = thresholdBehavior(state.effectiveStart, state.effectiveEnd);
     const std::string configured = thresholdBehavior(state.configuredStart, state.configuredEnd);
-    const bool presentConfiguredAsPrimary = control.visible && control.checked && !configured.empty();
-    std::string behavior = control.visible && !control.checked
+    const bool presentConfiguredAsPrimary =
+        control.visible && mode != ChargeLimitMode::ExternallyManaged && control.checked && !configured.empty();
+    std::string behavior = control.visible && mode != ChargeLimitMode::ExternallyManaged && !control.checked
         ? i18n::tr("control-center.power.charging.full-charge")
         : (presentConfiguredAsPrimary
                ? configured
@@ -582,7 +585,9 @@ void PowerTab::rebuildChargeLimits() {
     row.behaviorLabel->setText(behavior);
     row.behaviorLabel->setColor(colorSpecFromRole(ColorRole::OnSurface));
 
-    const bool showConfigured = !control.visible && !configured.empty() && !sameThresholds(state);
+    const bool showConfigured = (mode == ChargeLimitMode::ExternallyManaged || !control.visible)
+        && !configured.empty()
+        && !sameThresholds(state);
     row.configuredLabel->setVisible(showConfigured);
     if (showConfigured) {
       row.configuredLabel->setText(i18n::tr("control-center.power.charging.configured", "limits", configured));
@@ -599,10 +604,17 @@ void PowerTab::rebuildChargeLimits() {
     row.managementLabel->setVisible(!management.empty());
     if (!management.empty()) {
       row.managementLabel->setText(management);
+      row.managementLabel->setColor(
+          colorSpecFromRole(ColorRole::OnSurfaceVariant, mode == ChargeLimitMode::ExternallyManaged ? 0.55F : 1.0F)
+      );
     }
 
     row.controlRow->setVisible(control.visible);
     if (control.visible) {
+      row.controlLabel->setColor(
+          mode == ChargeLimitMode::ExternallyManaged ? colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.55F)
+                                                     : colorSpecFromRole(ColorRole::OnSurface)
+      );
       row.toggle->setCheckedImmediate(control.checked);
       row.toggle->setEnabled(control.enabled);
     }

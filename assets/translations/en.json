@@ -309,7 +309,7 @@
         "display-only": "Display only",
         "error-denied": "Authorization was denied. Charge thresholds were not changed.",
         "error-failed": "Charge thresholds could not be changed.",
-        "externally-managed": "Externally managed",
+        "externally-managed": "Set by another tool. Configure UPower to manage charge thresholds.",
         "firmware-managed": "Charging is managed by system firmware",
         "full-charge": "Can charge to 100%",
         "starts": "Starts below {start}%",

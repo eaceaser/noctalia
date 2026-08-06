@@ -165,6 +165,7 @@ int main() {
   state.effectiveStart = 75U;
   state.effectiveEnd = 80U;
   assert(PowerTabTestAccess::mode(state) == Mode::ExternallyManaged);
+  assert(PowerTabTestAccess::control(state) == std::tuple(true, true, false));
 
   state.requestPending = true;
   state.requestedEnabled = false;
@@ -227,7 +228,14 @@ int main() {
   state = supportedState(false);
   state.effectiveStart = 75U;
   state.effectiveEnd = 80U;
-  assert(PowerTabTestAccess::control(state) == std::tuple(false, false, false));
+  assert(PowerTabTestAccess::control(state) == std::tuple(true, true, false));
+
+  // Keep the disabled control visible when UPower reports the externally applied
+  // thresholds but does not advertise support for changing them.
+  state.supported = false;
+  state.methodAvailable = false;
+  assert(PowerTabTestAccess::mode(state) == Mode::ExternallyManaged);
+  assert(PowerTabTestAccess::control(state) == std::tuple(true, true, false));
 
   return 0;
 }

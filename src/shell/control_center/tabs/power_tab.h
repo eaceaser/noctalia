@@ -91,6 +91,7 @@ private:
     Label* managementLabel = nullptr;
     Label* errorLabel = nullptr;
     Flex* controlRow = nullptr;
+    Label* controlLabel = nullptr;
     Toggle* toggle = nullptr;
   };
   std::vector<ChargeLimitRow> m_chargeLimitRows;
