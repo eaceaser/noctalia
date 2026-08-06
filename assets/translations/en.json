@@ -311,7 +311,7 @@
         "error-failed": "Charge thresholds could not be changed.",
         "externally-managed": "Externally managed",
         "firmware-managed": "Charging is managed by system firmware",
-        "full-charge": "Allows the battery to charge fully",
+        "full-charge": "Can charge to 100%",
         "starts": "Starts below {start}%",
         "starts-stops": "Starts below {start}% · Stops at {end}%",
         "stops": "Stops at {end}%",

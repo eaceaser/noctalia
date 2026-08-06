@@ -361,8 +361,8 @@ int main() {
     assert(PowerTabTestAccess::name(tab, 0) == "Primary Battery");
     assert(PowerTabTestAccess::name(tab, 1) == "Secondary Battery");
     assert(findBattery(service, hiddenBattery.path) != nullptr);
-    assert(PowerTabTestAccess::behavior(tab, 0) == "Starts below 75% · Stops at 80%");
-    assert(PowerTabTestAccess::behaviorOpacity(tab, 0) < 1.0F);
+    assert(PowerTabTestAccess::behavior(tab, 0) == "Can charge to 100%");
+    assert(PowerTabTestAccess::behaviorOpacity(tab, 0) == 1.0F);
     assert(!PowerTabTestAccess::configuredVisible(tab, 0));
     assert(!PowerTabTestAccess::managementVisible(tab, 0));
     assert(PowerTabTestAccess::controlVisible(tab, 0));
@@ -407,6 +407,10 @@ int main() {
 
     assert(service.enableChargeThreshold(bat0.path, false));
     drainUntil(bus, [&]() { return bat0.pendingCount() == 1; });
+    PowerTabTestAccess::rebuild(tab);
+    assert(PowerTabTestAccess::behavior(tab, 0) == "Can charge to 100%");
+    assert(PowerTabTestAccess::behaviorOpacity(tab, 0) == 1.0F);
+    assert(!PowerTabTestAccess::configuredVisible(tab, 0));
     const int enabledReadsBeforeFailure = bat0.enabledReadCount();
     bat0.completeFailure("hardware rejected the write");
     drainUntil(bus, [&]() {

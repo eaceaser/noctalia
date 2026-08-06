@@ -566,12 +566,12 @@ void PowerTab::rebuildChargeLimits() {
     const ChargeLimitControlState control = chargeLimitControlState(state);
     const std::string effective = thresholdBehavior(state.effectiveStart, state.effectiveEnd);
     const std::string configured = thresholdBehavior(state.configuredStart, state.configuredEnd);
-    // For a controllable device this line describes the preset controlled by the toggle. Keep it
-    // stable while the asynchronous operation changes the effective kernel values underneath it.
-    const bool presentConfiguredAsPrimary = control.visible && !configured.empty();
-    std::string behavior = presentConfiguredAsPrimary
-        ? configured
-        : (permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge") : effective);
+    const bool presentConfiguredAsPrimary = control.visible && control.checked && !configured.empty();
+    std::string behavior = control.visible && !control.checked
+        ? i18n::tr("control-center.power.charging.full-charge")
+        : (presentConfiguredAsPrimary
+               ? configured
+               : (permitsFullCharge ? i18n::tr("control-center.power.charging.full-charge") : effective));
     if (behavior.empty()) {
       if (mode == ChargeLimitMode::FirmwareManaged) {
         behavior = i18n::tr("control-center.power.charging.firmware-managed");
@@ -580,12 +580,9 @@ void PowerTab::rebuildChargeLimits() {
       }
     }
     row.behaviorLabel->setText(behavior);
-    row.behaviorLabel->setColor(
-        control.visible && !control.checked ? colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.55F)
-                                            : colorSpecFromRole(ColorRole::OnSurface)
-    );
+    row.behaviorLabel->setColor(colorSpecFromRole(ColorRole::OnSurface));
 
-    const bool showConfigured = !presentConfiguredAsPrimary && !configured.empty() && !sameThresholds(state);
+    const bool showConfigured = !control.visible && !configured.empty() && !sameThresholds(state);
     row.configuredLabel->setVisible(showConfigured);
     if (showConfigured) {
       row.configuredLabel->setText(i18n::tr("control-center.power.charging.configured", "limits", configured));
