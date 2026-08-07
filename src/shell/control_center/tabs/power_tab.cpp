@@ -551,7 +551,7 @@ void PowerTab::rebuildChargeLimits() {
           })
       );
       m_chargingList->addChild(std::move(row));
-      m_chargeLimitRows.push_back(std::move(entry));
+      m_chargeLimitRows.push_back(entry);
     }
   }
 

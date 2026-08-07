@@ -121,8 +121,8 @@ namespace {
     try {
       std::string xml;
       proxy.callMethod("Introspect").onInterface(kIntrospectableInterface).storeResultsTo(xml);
-      return xml.find("<method name=\"EnableChargeThreshold\"") != std::string::npos
-          || xml.find("<method name='EnableChargeThreshold'") != std::string::npos;
+      return xml.contains("<method name=\"EnableChargeThreshold\"")
+          || xml.contains("<method name='EnableChargeThreshold'");
     } catch (const sdbus::Error&) {
       return std::nullopt;
     }
