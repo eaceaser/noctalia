@@ -1192,6 +1192,7 @@ if build_tests
         'export DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"; exec "$1"',
         'sh', upower_integration_exe.full_path(),
       ],
+      depends: upower_integration_exe,
     )
   endif
 
